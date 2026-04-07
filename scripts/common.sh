@@ -77,6 +77,7 @@ dotest ()
 	if ! containsElement "$f" "${known[@]}"; then
 	    if ! containsElement "$f" "${a[@]}"; then
 		pr_err "Unexpected attribute \"$f\", value=\"$(cat $f)\""
+		echo "  UNEXPECTED: $f=$(cat $f) [FAIL]"
 		rv=$((rv + 1))
 	    fi
 	fi
@@ -88,6 +89,7 @@ dotest ()
 	if [ ! -e ${a[$i]} ]
 	then
 	    pr_err "${a[$i]}: Attribute not found"
+	    echo "  ${a[$i]}: [FAIL] not found"
 	    rv=$((rv + 1))
 	    i=$((i + 1))
 	    continue
@@ -101,17 +103,24 @@ dotest ()
 		if [[ ${permissive} -eq 0 || ${a[$i]%_input} = ${a[$i]} ]];
 		then
 		    pr_err "${a[$i]}: bad value ${val}, expected ${v[$i]}"
+		    echo "  ${a[$i]}=${val} [FAIL] expected ${v[$i]} ${perm}"
 		    rv=$((rv + 1))
 		elif [[ ${permissive} -eq 1 && ${quiet} -eq 0 ]]; then
 		    echo "Note: ${a[$i]}: value difference: reported ${val}, expected ${v[$i]}"
+		    echo "  ${a[$i]}=${val} [OK~] ${perm}"
 		fi
+	    else
+		echo "  ${a[$i]}=${val} [OK] ${perm}"
 	    fi
+	else
+	    echo "  ${a[$i]}=(write-only) [OK] ${perm}"
 	fi
 	if [ -n "${p[$i]}" ]
 	then
 	    if [ "${perm}" != "${p[$i]}" ]
 	    then
 		pr_err "${a[$i]}: bad permissions: ${perm}, expected ${p[$i]}"
+		echo "  ${a[$i]} permissions: [FAIL] got ${perm}, expected ${p[$i]}"
 		rv=$((rv + 1))
 	    fi
 	fi
