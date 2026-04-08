@@ -549,6 +549,7 @@ check_range()
 		    return 0
 		fi
 		pr_err $(basename ${attr}): No such attribute
+		echo "  range $(basename "${attr}"): [FAIL] not found"
 		return 1
 	fi
 	orig=$(cat ${attr})
@@ -684,6 +685,18 @@ check_range()
 		    rv=1
 		fi
 	    fi
+	fi
+
+	local _attrname
+	_attrname="$(basename "${attr}")"
+	if [[ ${rv} -eq 0 ]]; then
+	    if [[ -n "${range}" ]]; then
+		echo "  range ${_attrname}: [OK]"
+	    else
+		echo "  range ${_attrname}: [${min}..${max}] [OK]"
+	    fi
+	else
+	    echo "  range ${_attrname}: [FAIL]"
 	fi
 	return ${rv}
 }
