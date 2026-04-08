@@ -3,15 +3,8 @@
 dir=$(dirname $0)
 . ${dir}/common.sh
 
-modprobe -r i2c-stub 2>/dev/null
-modprobe i2c-stub chip_addr=0x2c >/dev/null 2>&1
-if [ $? -ne 0 ]
-then
-	echo must be root
-	exit 1
-fi
-
-adapter=$(grep "SMBus stub driver" /sys/class/i2c-adapter/*/name | cut -f1 -d: | cut -f5 -d/ | cut -f2 -d-)
+load_i2c_stub 0x2c
+adapter=${i2c_adapter}
 
 regs=(00 00 00 00 00 00 34 80 34 80 00 00 00 00 00 00
 	00 35 00 35 00 80 00 80 e0 34 e0 34 00 80 00 80
@@ -37,7 +30,7 @@ do
 	i=$(($i + 1))
 done
 
-echo lm94 0x2c > /sys/class/i2c-adapter/i2c-${adapter}/new_device
+echo lm94 0x2c > "$(adapter_path ${adapter})/new_device"
 
 base=$(getbase ${adapter} 002c)
 if [ "${base}" = "" -o ! -d "${base}" ]
