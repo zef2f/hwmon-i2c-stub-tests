@@ -1259,7 +1259,7 @@ load_i2c_stub()
 	pr_err "Failed to load i2c-stub driver"
 	exit 1
     fi
-    i2c_adapter="$(grep "SMBus stub driver" /sys/class/i2c-dev/*/name 2>/dev/null | cut -f1 -d: | cut -f5 -d/ | cut -f2 -d-)"
+    i2c_adapter="$(grep -H "SMBus stub driver" /sys/class/i2c-dev/*/name 2>/dev/null | cut -f1 -d: | cut -f5 -d/ | cut -f2 -d-)"
     if [[ -z "${i2c_adapter}" ]]; then
 	pr_err "I2C adapter not found"
 	exit 1
