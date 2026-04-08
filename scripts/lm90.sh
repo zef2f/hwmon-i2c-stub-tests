@@ -677,6 +677,24 @@ permissions_lm90=(
 # others:
 # ../register-dumps/w83l771-manuel.dump (similar to lm86)
 
+i2c_stub_supports_regmap_aliasing()
+{
+    modinfo -p i2c-stub 2>/dev/null | grep -q '^regmap_write:'
+}
+
+prepare_legacy_stub_regs()
+{
+    local -n regs_ref=$1
+    local i
+
+    # Old i2c-stub exposes only the read-side register file. Mirror the
+    # limit registers expected by lm90.sh into the read addresses.
+    for i in $(seq 0 5)
+    do
+	regs_ref[$((3 + i))]="${regs_ref[$((9 + i))]}"
+    done
+}
+
 runtest()
 {
     local chip=$1
@@ -684,14 +702,21 @@ runtest()
     local attrs=("${!3}")
     local vals=("${!4}")
     local permissions=("${!5}")
+    local legacy_stub=0
     local rv
     local i
 
     echo Testing ${chip} ...
 
-    load_i2c_stub ${i2c_addr} \
-	"regmap_write=0x09,0x0a,0x0b,0x0c,0x0d,0x0e" \
-	"regmap_read=0x03,0x04,0x05,0x06,0x07,0x08"
+    if i2c_stub_supports_regmap_aliasing; then
+	load_i2c_stub ${i2c_addr} \
+	    "regmap_write=0x09,0x0a,0x0b,0x0c,0x0d,0x0e" \
+	    "regmap_read=0x03,0x04,0x05,0x06,0x07,0x08"
+    else
+	legacy_stub=1
+	prepare_legacy_stub_regs regs
+	load_i2c_stub ${i2c_addr}
+    fi
 
     modprobe -r lm90
 
@@ -718,32 +743,55 @@ runtest()
     dotest attrs[@] vals[@] permissions[@]
     rv=$?
 
-    check_range -b ${basedir} -s 200 -d 500 -r -q temp1_crit_hyst
-    rv=$(($? + ${rv}))
-    check_range -i -b ${basedir} -s 200 -d 500 -r -q temp2_offset
-    rv=$(($? + ${rv}))
-    check_range -i -b ${basedir} -s 200 -d 500 -r -q temp3_emergency
-    rv=$(($? + ${rv}))
-    check_range -i -b ${basedir} -s 200 -d 500 -r -q temp3_min
-    rv=$(($? + ${rv}))
-    check_range -i -b ${basedir} -s 200 -d 500 -r -q temp3_max
-    rv=$(($? + ${rv}))
-    check_range -i -b ${basedir} -s 200 -d 500 -r -q temp3_crit
-    rv=$(($? + ${rv}))
-    check_range -b ${basedir} -s 200 -d 8000 -r -q update_interval
-    rv=$(($? + ${rv}))
+    if [[ "${legacy_stub}" -eq 1 ]]; then
+	# Old i2c-stub can not alias read/write limit registers, so the min/max
+	# writeback range checks from the enhanced stub variant are not valid.
+	check_range -i -b ${basedir} -s 200 -d 500 -r -q temp1_emergency
+	rv=$(($? + ${rv}))
+	check_range -b ${basedir} -s 200 -d 500 -r -q temp1_crit
+	rv=$(($? + ${rv}))
+	check_range -b ${basedir} -s 200 -d 500 -r -q temp1_crit_hyst
+	rv=$(($? + ${rv}))
+	check_range -i -b ${basedir} -s 200 -d 500 -r -q temp2_offset
+	rv=$(($? + ${rv}))
+	check_range -i -b ${basedir} -s 200 -d 500 -r -q temp2_emergency
+	rv=$(($? + ${rv}))
+	check_range -b ${basedir} -s 200 -d 500 -r -q temp2_crit
+	rv=$(($? + ${rv}))
+	check_range -i -b ${basedir} -s 200 -d 500 -r -q temp3_emergency
+	rv=$(($? + ${rv}))
+	check_range -i -b ${basedir} -s 200 -d 500 -r -q temp3_crit
+	rv=$(($? + ${rv}))
+	check_range -b ${basedir} -s 200 -d 8000 -r -q update_interval
+	rv=$(($? + ${rv}))
+    else
+	check_range -b ${basedir} -s 200 -d 500 -r -q temp1_crit_hyst
+	rv=$(($? + ${rv}))
+	check_range -i -b ${basedir} -s 200 -d 500 -r -q temp2_offset
+	rv=$(($? + ${rv}))
+	check_range -i -b ${basedir} -s 200 -d 500 -r -q temp3_emergency
+	rv=$(($? + ${rv}))
+	check_range -i -b ${basedir} -s 200 -d 500 -r -q temp3_min
+	rv=$(($? + ${rv}))
+	check_range -i -b ${basedir} -s 200 -d 500 -r -q temp3_max
+	rv=$(($? + ${rv}))
+	check_range -i -b ${basedir} -s 200 -d 500 -r -q temp3_crit
+	rv=$(($? + ${rv}))
+	check_range -b ${basedir} -s 200 -d 8000 -r -q update_interval
+	rv=$(($? + ${rv}))
 
-    for i in $(seq 1 2)
-    do
-        check_range -i -b ${basedir} -s 200 -d 500 -r -q temp${i}_emergency
-        rv=$(($? + ${rv}))
-	check_range -b ${basedir} -s 200 -d 500 -r -q temp${i}_crit
-	rv=$(($? + ${rv}))
-	check_range -b ${basedir} -s 1000 -d 0 -r -q temp${i}_min
-	rv=$(($? + ${rv}))
-	check_range -b ${basedir} -s 1000 -d 0 -r -q temp${i}_max
-	rv=$(($? + ${rv}))
-    done
+	for i in $(seq 1 2)
+	do
+	    check_range -i -b ${basedir} -s 200 -d 500 -r -q temp${i}_emergency
+	    rv=$(($? + ${rv}))
+	    check_range -b ${basedir} -s 200 -d 500 -r -q temp${i}_crit
+	    rv=$(($? + ${rv}))
+	    check_range -b ${basedir} -s 1000 -d 0 -r -q temp${i}_min
+	    rv=$(($? + ${rv}))
+	    check_range -b ${basedir} -s 1000 -d 0 -r -q temp${i}_max
+	    rv=$(($? + ${rv}))
+	done
+    fi
 
     modprobe -r i2c-stub 2>/dev/null
 
