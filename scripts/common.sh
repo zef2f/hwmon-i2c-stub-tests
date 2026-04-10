@@ -501,11 +501,12 @@ check_range()
 	local prev
 	local ignore=0
 	local silent=0
+	local no_bounds_check=0
 	local range=""
 
 	__verbose=0
 
-	while getopts "R:Sb:d:il:qrs:u:vw:" opt
+	while getopts "R:Sb:d:il:nqrs:u:vw:" opt
 	do
 	    case ${opt} in
 	    b)	base=${OPTARG}/
@@ -513,6 +514,8 @@ check_range()
 	    d)	mdev=${OPTARG}	# maximum permitted deviation
 		;;
 	    i)  ignore=1
+		;;
+	    n)	no_bounds_check=1
 		;;
 	    l)	min=${OPTARG}
 		;;
@@ -566,10 +569,13 @@ check_range()
 		fi
 		check_read_write_read "${attr}" "${min}"
 	    else
-		writeattr ${attr} $((min - 1))
-		if [ $? -eq 0 ]
+		if [ ${no_bounds_check} -eq 0 ]
 		then
-		    pr_err "Out of range value accepted writing into $(basename ${attr}): val=$((min - 1)) min=${min}"
+		    writeattr ${attr} $((min - 1))
+		    if [ $? -eq 0 ]
+		    then
+			pr_err "Out of range value accepted writing into $(basename ${attr}): val=$((min - 1)) min=${min}"
+		    fi
 		fi
 	    fi
 	    if [ ${max} -eq ${DEFAULT_MAX} ]
@@ -584,10 +590,13 @@ check_range()
 		fi
 		check_read_write_read "${attr}" "${max}"
 	    else
-		writeattr ${attr} $((max + 1))
-		if [ $? -eq 0 ]
+		if [ ${no_bounds_check} -eq 0 ]
 		then
-		    pr_err "Out of range value accepted writing into $(basename ${attr}): val=$((max + 1)) max=${max}"
+		    writeattr ${attr} $((max + 1))
+		    if [ $? -eq 0 ]
+		    then
+			pr_err "Out of range value accepted writing into $(basename ${attr}): val=$((max + 1)) max=${max}"
+		    fi
 		fi
 	    fi
 	    if [[ "${min}" -eq "${max}" && "${silent}" -eq 0 ]]; then
