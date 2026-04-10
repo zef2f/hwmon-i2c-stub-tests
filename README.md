@@ -1,7 +1,9 @@
 # hwmon i2c-stub tests ([ru](README.ru.md))
 
 Tests for Linux hwmon drivers using the `i2c-stub` kernel module as a
-software I2C bus, without requiring real hardware.
+software I2C bus, without requiring real hardware. Based on
+[groeck/module-tests](https://github.com/groeck/module-tests), adapted
+for Linux 6.12 kernel coverage testing.
 
 ## Requirements
 
