@@ -3,3 +3,4 @@ adm1031
 adm1026
 adt7462
 adt7470
+lm85
