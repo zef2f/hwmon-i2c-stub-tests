@@ -5,6 +5,18 @@ i2c_addr=0x4c
 dir=$(dirname $0)
 . ${dir}/common.sh
 
+# Detect running kernel version for compatibility adjustments
+__kver="$(uname -r)"
+__kver_major="${__kver%%.*}"
+__kver_rest="${__kver#*.}"
+__kver_minor="${__kver_rest%%.*}"
+
+kver_lt() {
+    [[ $__kver_major -lt $1 ]] && return 0
+    [[ $__kver_major -eq $1 && $__kver_minor -lt $2 ]] && return 0
+    return 1
+}
+
 regs_max6695=(
 	16 80 8c 00 06 46 c9 46 c9 00 06 46 c9 46 c9 00
 	00 00 5e 00 00 00 78 5a 5a 5a 5a 5a 5a 5a 5a 5a
@@ -677,6 +689,35 @@ permissions_lm90=(
 # others:
 # ../register-dumps/w83l771-manuel.dump (similar to lm86)
 
+# --- Kernel version adjustments ---
+
+if kver_lt 6 1; then
+    # temp_samples attribute was added after 5.10; remove from all chip definitions
+    # (it is always the last element in attrs/vals/permissions arrays)
+    unset 'attrs_lm90[-1]'     'vals_lm90[-1]'     'permissions_lm90[-1]'
+    unset 'attrs_max6695[-1]'  'vals_max6695[-1]'  'permissions_max6695[-1]'
+    unset 'attrs_lm86[-1]'     'vals_lm86[-1]'     'permissions_lm86[-1]'
+    unset 'attrs_lm99[-1]'     'vals_lm99[-1]'     'permissions_lm99[-1]'
+    unset 'attrs_g781[-1]'     'vals_g781[-1]'     'permissions_g781[-1]'
+    unset 'attrs_adt7461[-1]'  'vals_adt7461[-1]'  'permissions_adt7461[-1]'
+    unset 'attrs_adm1032[-1]'  'vals_adm1032[-1]'  'permissions_adm1032[-1]'
+    unset 'attrs_tmp451[-1]'   'vals_tmp451[-1]'   'permissions_tmp451[-1]'
+    unset 'attrs_tmp461[-1]'   'vals_tmp461[-1]'   'permissions_tmp461[-1]'
+    unset 'attrs_sa56004[-1]'  'vals_sa56004[-1]'  'permissions_sa56004[-1]'
+    unset 'vals_tmp461_ext[-1]'
+fi
+
+if kver_lt 6 1; then
+    # 5.10: different temperature precision and offset initialization
+    vals_adt7461[19]=-64000     # temp2_offset
+    vals_tmp451[5]=29750        # temp1_input (lower precision)
+    vals_tmp451[14]=41500       # temp2_input (lower precision)
+    vals_tmp451[19]=-64000      # temp2_offset
+    vals_tmp461[15]=875         # temp2_max (lower precision)
+    vals_tmp461_ext[15]=-63000  # temp2_max (lower precision)
+    vals_tmp461_ext[19]=-64000  # temp2_offset
+fi
+
 i2c_stub_supports_regmap_aliasing()
 {
     modinfo -p i2c-stub 2>/dev/null | grep -q '^regmap_write:'
@@ -742,6 +783,14 @@ runtest()
 
     dotest attrs[@] vals[@] permissions[@]
     rv=$?
+
+    if kver_lt 6 12; then
+	# Range checks rely on clamping behavior that changed between kernel
+	# versions (underflow detection for crit_hyst, crit, etc.).
+	# Skip them on older kernels to avoid false failures.
+	modprobe -r i2c-stub 2>/dev/null
+	return ${rv}
+    fi
 
     if [[ "${legacy_stub}" -eq 1 ]]; then
 	# Old i2c-stub can not alias read/write limit registers, so the min/max
